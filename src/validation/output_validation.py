@@ -1,7 +1,8 @@
 """Valida a resposta final contra o que as ferramentas devolveram (a "evidência").
 
 A evidência são os resultados das tools, que o cliente nunca vê. A resposta só pode afirmar
-valores, prazos, status, rastreio e estoque que existam ali (ou que o próprio cliente disse).
+valores, prazos, status, rastreio, estoque e regras da loja que existam ali (ou que o próprio
+cliente disse). A resposta também não pode expor instruções internas nem citar o manual.
 Verificação determinística (regex), não um segundo LLM: grátis, previsível e testável.
 Devolve a lista de problemas; vazia = resposta liberada.
 """
@@ -58,6 +59,7 @@ def _json(texto: str) -> dict:
 # ---------- Verificações ----------
 
 def _fatos_sem_evidencia(resposta, evidencias, falas) -> list[str]:
+    """Todo número da resposta precisa existir nas consultas (inclui os trechos do manual)."""
     aceitos = _com_parcelas(_fatos(" ".join([e.conteudo for e in evidencias] + falas)))
     problemas = []
     for unidade, valor in sorted(_fatos(resposta) - aceitos):
@@ -103,25 +105,37 @@ def _estoque(resposta, evidencias) -> list[str]:
     return ["Disponibilidade afirmada sem nenhum produto disponível nas consultas."] if afirma and not consultado else []
 
 
-_FONTE = re.compile(r"manual|\bp\.\s*\d|se[çc][ãa]o", re.I)
+# Termos que só aparecem quando a resposta AFIRMA uma regra da loja. Estreito de propósito:
+# "devolução" ou "frete" sozinhos também aparecem em perguntas ("qual a data de recebimento?").
+_REGRA_DA_LOJA = re.compile(
+    r"reembols|sem juros|frete gr[aá]tis|arrependimento|garantia (?:legal|do fabricante)", re.I)
 
 
-def _fonte_da_politica(resposta, evidencias, falas) -> list[str]:
-    """Se a resposta usa número que só veio do manual, precisa citar a fonte (regra 3 do prompt)."""
-    politica = _fatos(" ".join(e.conteudo for e in evidencias if e.ferramenta == "buscar_politica"))
-    outras = _fatos(" ".join([e.conteudo for e in evidencias if e.ferramenta != "buscar_politica"] + falas))
-    if (_fatos(resposta) & politica) - outras and not _FONTE.search(resposta):
-        return ["Regra do manual citada sem a fonte (página e seção)."]
-    return []
+def _regra_sem_consulta(resposta, evidencias) -> list[str]:
+    """Regra da loja afirmada sem nenhum trecho do manual consultado (alucinação sem número)."""
+    if not _REGRA_DA_LOJA.search(resposta):
+        return []
+    consultou = any(e.ferramenta == "buscar_politica" and _json(e.conteudo).get("trechos")
+                    for e in evidencias)
+    return [] if consultou else ["Regra da loja afirmada sem consulta ao manual (use buscar_politica)."]
 
 
 _VAZAMENTO = ("regras de atendimento", "preco_texto", "buscar_produto", "consultar_disponibilidade",
               "consultar_pedido", "buscar_politica", "system prompt")
 
+# Citação do manual interno ("Manual de Políticas, p. 4, seção 4.1"). Estreito de propósito:
+# "manual" sozinho apareceria em "com todos os acessórios e manuais".
+_CITACAO_MANUAL = re.compile(r"manual de pol[ií]ticas|manual interno|\bp\.\s*\d|se[çc][ãa]o\s+\d", re.I)
+
 
 def _vazamento(resposta) -> list[str]:
     texto = resposta.casefold()
-    return ["A resposta expõe instruções ou nomes internos."] if any(t in texto for t in _VAZAMENTO) else []
+    problemas = []
+    if any(t in texto for t in _VAZAMENTO):
+        problemas.append("A resposta expõe instruções ou nomes internos.")
+    if _CITACAO_MANUAL.search(resposta):
+        problemas.append("A resposta cita página, seção ou nome do manual interno; reescreva sem citar a fonte.")
+    return problemas
 
 
 def validar_resposta(resposta: str, evidencias: list[Evidencia], falas_cliente: list[str]) -> list[str]:
@@ -131,6 +145,6 @@ def validar_resposta(resposta: str, evidencias: list[Evidencia], falas_cliente: 
         *_status_de_pedido(resposta, evidencias),
         *_rastreio(resposta, evidencias, falas_cliente),
         *_estoque(resposta, evidencias),
-        *_fonte_da_politica(resposta, evidencias, falas_cliente),
+        *_regra_sem_consulta(resposta, evidencias),
         *_vazamento(resposta),
     ]

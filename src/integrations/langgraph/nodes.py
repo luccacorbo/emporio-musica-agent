@@ -68,8 +68,8 @@ def criar_nos(llm: LLMClient, ferramentas: Ferramentas, agora: Callable[[], date
         if estado.get("problemas"):  # retry: a correção vai no system prompt, não no histórico
             sistema += ("\n\nCORREÇÃO: sua resposta anterior foi rejeitada na verificação: "
                         + " ".join(estado["problemas"])
-                        + " Consulte as ferramentas se precisar e responda de novo usando só dados consultados, "
-                          "citando a fonte (página e seção) das regras do manual. Não mencione esta correção ao cliente.")
+                        + " Consulte as ferramentas se precisar e responda de novo usando só dados consultados. "
+                          "Nunca cite página, seção ou o nome do manual. Não mencione esta correção ao cliente.")
         resposta = llm.complete([Message(role="system", content=sistema), *estado["messages"]],
                                 ferramentas.specs)
         if resposta.tool_calls:  # vai executar ferramentas: a chamada entra no histórico
