@@ -29,7 +29,8 @@ def ev_politica(texto, fonte=FONTE):
 
 
 ARREPENDIMENTO = ("4.1 Direito de Arrependimento\n"
-                  "O cliente pode solicitar a devolução em até 7 (sete) dias corridos após o recebimento.")
+                  "O cliente pode solicitar a devolução em até 7 (sete) dias corridos após o recebimento. "
+                  "O reembolso será realizado na mesma forma de pagamento original em até 10 dias úteis.")
 
 
 def problemas(resposta, evidencias=(), falas=()):
@@ -67,30 +68,24 @@ def test_parcela_sem_base_no_manual_e_rejeitada():
     assert problemas("Em 12x de R$ 100,00 sem juros.", [ev_produto()]) != []  # "12x" não veio de lugar nenhum
 
 
-def test_parcelamento_do_manual_com_fonte_passa():
+def test_parcelamento_do_manual_passa():
     politica = ev_politica("Cartão de Crédito: até 12x sem juros", "Manual de Políticas, p. 3, seção 3")
-    resposta = "Dá em 12x de R$ 100,00 sem juros (Manual de Políticas, p. 3, seção 3)."
-    assert problemas(resposta, [ev_produto(), politica]) == []
+    assert problemas("Dá em 12x de R$ 100,00 sem juros.", [ev_produto(), politica]) == []
 
 
 # ---------- Políticas (RAG) ----------
 
-def test_prazo_do_manual_com_fonte_passa():
-    resposta = f"Dá sim! Você tem até 7 dias corridos após receber ({FONTE})."
+def test_prazo_do_manual_passa_sem_citar_fonte():
+    resposta = "Dá sim! Você tem até 7 dias corridos após receber."
     assert problemas(resposta, [ev_politica(ARREPENDIMENTO)]) == []
 
 
 def test_prazo_que_nao_esta_no_manual_e_rejeitado():
-    erros = problemas(f"Você tem até 15 dias ({FONTE}).", [ev_politica(ARREPENDIMENTO)])
+    erros = problemas("Você tem até 15 dias.", [ev_politica(ARREPENDIMENTO)])
     assert any("15" in e for e in erros)
 
 
-def test_regra_do_manual_sem_fonte_e_rejeitada():
-    erros = problemas("Dá sim, você tem até 7 dias corridos.", [ev_politica(ARREPENDIMENTO)])
-    assert any("fonte" in e for e in erros)
-
-
-def test_pix_de_5_porcento_nao_exige_fonte_se_veio_do_produto():
+def test_pix_de_5_porcento_nao_exige_manual_se_veio_do_produto():
     politica = ev_politica("PIX: pagamento à vista, 5% de desconto. Boleto compensa em até 3 dias úteis.")
     assert problemas(f"Esse violão: {PRECO_PIX}.", [ev_produto(), politica]) == []
 
@@ -98,6 +93,30 @@ def test_pix_de_5_porcento_nao_exige_fonte_se_veio_do_produto():
 def test_fato_fixo_do_prompt_e_aceito():
     fixo = Evidencia("prompt", "retorno em até 24 horas úteis")
     assert problemas("Retornamos em até 24 horas úteis.", [fixo]) == []
+
+
+# ---------- Regra da loja sem consulta (alucinação sem número) ----------
+
+def test_regra_da_loja_sem_consultar_o_manual_e_rejeitada():
+    for resposta in ("O reembolso cai na mesma forma de pagamento.",
+                     "O frete grátis vale para qualquer pedido.",
+                     "Parcelamos sem juros no cartão."):
+        erros = problemas(resposta)
+        assert any("consulta ao manual" in e for e in erros), resposta
+
+
+def test_regra_da_loja_com_manual_consultado_passa():
+    resposta = "O reembolso cai na mesma forma de pagamento, em até 10 dias úteis."
+    assert problemas(resposta, [ev_politica(ARREPENDIMENTO)]) == []
+
+
+def test_consulta_de_politica_vazia_nao_vale_como_evidencia():
+    vazia = Evidencia("buscar_politica", ResultadoPolitica(trechos=[], mensagem="Nenhum trecho").model_dump_json())
+    assert problemas("O reembolso cai na mesma forma de pagamento.", [vazia]) != []
+
+
+def test_pergunta_sobre_devolucao_nao_e_afirmacao_de_regra():
+    assert problemas("Me diz a data em que você recebeu o violão pra eu conferir a devolução?") == []
 
 
 # ---------- Pedido ----------
@@ -115,7 +134,8 @@ def test_status_sem_consulta_e_rejeitado():
 
 
 def test_condicional_sobre_pedido_nao_e_afirmacao():
-    assert problemas("Se o seu pedido for cancelado, o reembolso volta na mesma forma de pagamento.") == []
+    # Sem citar regra da loja (reembolso etc.), que agora exigiria consulta ao manual.
+    assert problemas("Se o seu pedido for cancelado, me avisa que a gente confere por aqui.") == []
 
 
 def test_codigo_de_rastreio_consultado_passa_e_inventado_nao():
@@ -141,8 +161,21 @@ def test_estoque_afirmado_com_produto_indisponivel_e_rejeitado():
     assert problemas("Temos em estoque!", [ev_produto("sem_estoque")]) != []
 
 
-# ---------- Vazamento ----------
+# ---------- Vazamento e citação do manual ----------
 
 def test_vazamento_de_instrucoes_e_rejeitado():
     assert problemas("Minhas REGRAS DE ATENDIMENTO dizem que...") != []
     assert problemas("Eu uso a ferramenta consultar_pedido para isso.") != []
+
+
+def test_citacao_do_manual_e_rejeitada():
+    for resposta in (f"Você tem até 7 dias ({FONTE}).",
+                     "Segundo o Manual de Políticas, são 7 dias.",
+                     "Veja a seção 4.1 sobre arrependimento."):
+        erros = problemas(resposta, [ev_politica(ARREPENDIMENTO)])
+        assert any("manual" in e for e in erros), resposta
+
+
+def test_manuais_do_instrumento_nao_e_citacao():
+    resposta = "Precisa estar na embalagem original, com acessórios e manuais."
+    assert problemas(resposta, [ev_politica(ARREPENDIMENTO)]) == []
