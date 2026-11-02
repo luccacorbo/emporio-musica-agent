@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field
 
 from src.agent.prompts import MENSAGEM_ERRO, build_system_prompt
 
-DEFAULT_MODEL = "llama-3.3-70b-versatile"
+DEFAULT_MODEL = "openai/gpt-oss-20b"
 
 
 class LLMError(Exception):
