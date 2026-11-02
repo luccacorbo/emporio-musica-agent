@@ -15,7 +15,6 @@ definido pelo manual (informal, mas profissional), e recusa com educação o que
 2. [Exemplos de conversa](#exemplos-de-conversa)
 3. [Arquitetura](#arquitetura)
 4. [Decisões técnicas](#decisões-técnicas)
-5. [Suposições e inconsistências nos dados](#suposições-e-inconsistências-nos-dados)
 6. [Testes](#testes)
 7. [Limitações conhecidas](#limitações-conhecidas)
 8. [O que eu faria com mais tempo](#o-que-eu-faria-com-mais-tempo)
