@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Empório da Música</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <main class="app">
+    <section class="chat">
+      <div id="mensagens" class="mensagens" role="log" aria-live="polite"></div>
+
+      <form id="form" class="entrada" autocomplete="off">
+        <input id="texto" type="text" placeholder="Digite sua mensagem..." maxlength="1000"
+               aria-label="Mensagem" autofocus>
+        <button type="submit" aria-label="Enviar">
+          <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d="M2.5 20.5l19-8.5-19-8.5v6.6l13 1.9-13 1.9z"/>
+          </svg>
+        </button>
+      </form>
+    </section>
+  </main>
+
+  <script src="js/chat.js"></script>
+</body>
+</html>
